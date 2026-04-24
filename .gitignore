@@ -1,0 +1,18 @@
+# Python
+venv/
+*.pyc
+__pycache__/
+db.sqlite3
+.env
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+.eslintcache
+
+# Project specific
+docs/diagrams/
+GEMINI.md
+.vscode/
+.idea/
+*.log
