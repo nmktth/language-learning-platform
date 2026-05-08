@@ -1,23 +1,28 @@
-import random
-from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
-from core.models import Language, Course, Lesson, Exercise, ProgressLog
-from django.utils import timezone
-import datetime
+from django.core.management.base import BaseCommand
+
+from core.models import Achievement, Course, Language, ProgressLog, UserAchievement
+from core.patterns.behavioral import AchievementDefinitionAdapter, LegacyExternalSystem
+from core.services.course_builder import CourseCreationModule, CourseSpec, ExerciseModifierSpec, LessonSpec
+
 
 class Command(BaseCommand):
-    help = 'Seeds the database with 30+ courses including 10+ specifically for Russian speakers'
+    help = 'Seeds the database with courses, lessons, multiple exercise types, and achievements.'
 
     def handle(self, *args, **kwargs):
-        self.stdout.write("Total System Reboot...")
+        self.stdout.write('Total System Reboot...')
+        UserAchievement.objects.all().delete()
+        Achievement.objects.all().delete()
         Course.objects.all().delete()
         Language.objects.all().delete()
         User.objects.exclude(is_superuser=True).delete()
         ProgressLog.objects.all().delete()
-        
-        user = User.objects.create_user(username='student1', email='student1@test.com', password='password123')
-        
-        langs = {
+
+        User.objects.create_user(username='student1', email='student1@test.com', password='password123')
+        if not User.objects.filter(username='admin').exists():
+            User.objects.create_superuser(username='admin', email='admin@test.com', password='admin12345')
+
+        languages = {
             'ru': Language.objects.create(name='Русский', code='ru'),
             'en': Language.objects.create(name='English', code='en'),
             'es': Language.objects.create(name='Español', code='es'),
@@ -30,75 +35,191 @@ class Command(BaseCommand):
             'la': Language.objects.create(name='Latina', code='la'),
         }
 
-        vocab = [
-            {'en': 'Apple', 'ru': 'Яблоко', 'es': 'Manzana', 'fr': 'Pomme', 'de': 'Apfel', 'it': 'Mela', 'ja': 'Ringo', 'zh': 'Píngguǒ'},
-            {'en': 'Water', 'ru': 'Вода', 'es': 'Agua', 'fr': 'Eau', 'de': 'Wasser', 'it': 'Acqua', 'ja': 'Mizu', 'zh': 'Shuǐ'},
-            {'en': 'Bread', 'ru': 'Хлеб', 'es': 'Pan', 'fr': 'Pain', 'de': 'Brot', 'it': 'Pane', 'ja': 'Pan', 'zh': 'Miànbāo'},
-            {'en': 'House', 'ru': 'Дом', 'es': 'Casa', 'fr': 'Maison', 'de': 'Haus', 'it': 'Casa', 'ja': 'Ie', 'zh': 'Jiā'},
-            {'en': 'Friend', 'ru': 'Друг', 'es': 'Amigo', 'fr': 'Ami', 'de': 'Freund', 'it': 'Amico', 'ja': 'Tomodachi', 'zh': 'Péngyǒu'},
-            {'en': 'Book', 'ru': 'Книга', 'es': 'Libro', 'fr': 'Livre', 'de': 'Buch', 'it': 'Libro', 'ja': 'Hon', 'zh': 'Shū'},
-        ]
+        AchievementDefinitionAdapter(LegacyExternalSystem()).sync()
 
-        matrix = [
-            # ДЛЯ РУССКИХ (12 курсов)
-            ('en', 'ru', 'Английский: Основы', 'Начни говорить на международном языке.'),
-            ('en', 'ru', 'Английский: Для работы', 'Бизнес-лексика и корпоративная этика.'),
-            ('en', 'ru', 'Английский: Путешествия', 'Все, что нужно в аэропорту и отеле.'),
-            ('es', 'ru', 'Испанский: Старт', 'Энергичный и яркий язык для отпуска.'),
-            ('fr', 'ru', 'Французский: База', 'Погрузись в культуру Франции.'),
-            ('de', 'ru', 'Немецкий: Уровень A1', 'Основы грамматики и произношения.'),
-            ('it', 'ru', 'Итальянский с нуля', 'Язык музыки, искусства и еды.'),
-            ('ja', 'ru', 'Японский: Хирагана', 'Первые шаги в восточной письменности.'),
-            ('zh', 'ru', 'Китайский: Введение', 'Основы тонов и иероглифики.'),
-            ('pt', 'ru', 'Португальский: Базовый', 'Солнечный язык Бразилии и Португалии.'),
-            ('la', 'ru', 'Латынь: Для медиков', 'Классическая база для науки.'),
-            ('la', 'ru', 'Латынь: Древние тексты', 'Читай философов в оригинале.'),
-
-            # ДЛЯ АНГЛИЧАН
-            ('ru', 'en', 'Russian for Beginners', 'Learn to read Cyrillic today.'),
-            ('es', 'en', 'Spanish Intensive', 'Master Spanish in weeks.'),
-            ('fr', 'en', 'French Daily', 'Learn how to speak like a Parisian.'),
-            ('it', 'en', 'Italian Cooking', 'Learn Italian while you cook.'),
-            
-            # ДЛЯ ИСПАНЦЕВ
-            ('ru', 'es', 'Ruso para Hispanos', 'Aprende el misterioso alfabeto cirílico.'),
-            ('en', 'es', 'Inglés Total', 'Domina el inglés de una vez por todas.'),
-        ]
-
-        prompts = {
-            'ru': ["Переведите '{w}'", "Как по-{t} будет '{w}'?", "Напишите '{w}' на языке {t}", "Как сказать '{w}'?"],
-            'en': ["Translate '{w}'", "How do you say '{w}' in {t}?", "Write '{w}' in {t}"],
+        vocabulary_map = {
+            'ru_to_en': [
+                {'source': 'Яблоко', 'target': 'Apple'},
+                {'source': 'Вода', 'target': 'Water'},
+                {'source': 'Дом', 'target': 'House'},
+                {'source': 'Друг', 'target': 'Friend'},
+            ],
+            'ru_to_es': [
+                {'source': 'Яблоко', 'target': 'Manzana'},
+                {'source': 'Вода', 'target': 'Agua'},
+                {'source': 'Книга', 'target': 'Libro'},
+                {'source': 'Дом', 'target': 'Casa'},
+            ],
+            'ru_to_fr': [
+                {'source': 'Вода', 'target': 'Eau'},
+                {'source': 'Хлеб', 'target': 'Pain'},
+                {'source': 'Друг', 'target': 'Ami'},
+                {'source': 'Книга', 'target': 'Livre'},
+            ],
+            'ru_to_de': [
+                {'source': 'Дом', 'target': 'Haus'},
+                {'source': 'Хлеб', 'target': 'Brot'},
+                {'source': 'Книга', 'target': 'Buch'},
+                {'source': 'Друг', 'target': 'Freund'},
+            ],
+            'ru_to_it': [
+                {'source': 'Яблоко', 'target': 'Mela'},
+                {'source': 'Вода', 'target': 'Acqua'},
+                {'source': 'Дом', 'target': 'Casa'},
+                {'source': 'Друг', 'target': 'Amico'},
+            ],
+            'ru_to_ja': [
+                {'source': 'Яблоко', 'target': 'Ringo'},
+                {'source': 'Вода', 'target': 'Mizu'},
+                {'source': 'Дом', 'target': 'Ie'},
+                {'source': 'Друг', 'target': 'Tomodachi'},
+            ],
+            'ru_to_zh': [
+                {'source': 'Яблоко', 'target': 'Píngguǒ'},
+                {'source': 'Вода', 'target': 'Shuǐ'},
+                {'source': 'Дом', 'target': 'Jiā'},
+                {'source': 'Друг', 'target': 'Péngyǒu'},
+            ],
+            'ru_to_pt': [
+                {'source': 'Яблоко', 'target': 'Maçã'},
+                {'source': 'Вода', 'target': 'Água'},
+                {'source': 'Дом', 'target': 'Casa'},
+                {'source': 'Друг', 'target': 'Amigo'},
+            ],
+            'ru_to_la': [
+                {'source': 'Вода', 'target': 'Aqua'},
+                {'source': 'Дом', 'target': 'Domus'},
+                {'source': 'Друг', 'target': 'Amicus'},
+                {'source': 'Книга', 'target': 'Liber'},
+            ],
+            'en_to_ru': [
+                {'source': 'Apple', 'target': 'Яблоко'},
+                {'source': 'Water', 'target': 'Вода'},
+                {'source': 'Friend', 'target': 'Друг'},
+                {'source': 'Book', 'target': 'Книга'},
+            ],
+            'en_to_es': [
+                {'source': 'Apple', 'target': 'Manzana'},
+                {'source': 'Water', 'target': 'Agua'},
+                {'source': 'House', 'target': 'Casa'},
+                {'source': 'Book', 'target': 'Libro'},
+            ],
         }
 
-        all_exercises = []
-        for target_code, src_code, title, desc in matrix:
-            t_lang = langs[target_code]
-            s_lang = langs[src_code]
-            course = Course.objects.create(title=title, description=desc, language=t_lang, source_language=s_lang)
-            lesson = Lesson.objects.create(course=course, title='Урок 1', order=1)
-            
-            for item in vocab:
-                s_word = item.get(src_code, item['en'])
-                t_word = item.get(target_code, item['en'])
-                
-                # Создаем пул вариаций
-                for p_text in prompts.get(src_code, prompts['en']):
-                    ex = Exercise.objects.create(lesson=lesson, type='translation', data={
-                        "question": p_text.format(w=s_word, t=t_lang.name),
-                        "correct_answer": t_word
-                    })
-                    all_exercises.append(ex)
-                
-                # Тесты
-                options = [t_word]
-                others = [v.get(target_code, v['en']) for v in vocab if v != item]
-                options.extend(random.sample(others, 3))
-                random.shuffle(options)
-                ex = Exercise.objects.create(lesson=lesson, type='multiple_choice', data={
-                    "question": f"Pick translation for '{s_word}'",
-                    "options": options,
-                    "correct_answer": t_word
-                })
-                all_exercises.append(ex)
+        course_specs = [
+            CourseSpec(
+                title='Английский: Основы',
+                description='Начни говорить на международном языке.',
+                target_language_code='en',
+                source_language_code='ru',
+                lessons=[
+                    LessonSpec(
+                        title='Урок 1: Базовые слова',
+                        vocabulary=vocabulary_map['ru_to_en'],
+                        modifiers=ExerciseModifierSpec(
+                            timed_seconds=45,
+                            hint_text='Подумайте о базовой лексике.',
+                            shuffle_options=True,
+                            add_audio_support=True,
+                            voice_locale='en-US',
+                        ),
+                    )
+                ],
+            ),
+            CourseSpec(
+                title='Испанский: Старт',
+                description='Энергичный и яркий язык для отпуска.',
+                target_language_code='es',
+                source_language_code='ru',
+                lessons=[
+                    LessonSpec(
+                        title='Урок 1: В путешествии',
+                        vocabulary=vocabulary_map['ru_to_es'],
+                        modifiers=ExerciseModifierSpec(hint_text='Вспомните слова из поездки.', shuffle_options=True),
+                    )
+                ],
+            ),
+            CourseSpec(
+                title='Французский: База',
+                description='Погрузись в культуру Франции.',
+                target_language_code='fr',
+                source_language_code='ru',
+                lessons=[LessonSpec(title='Урок 1: Everyday French', vocabulary=vocabulary_map['ru_to_fr'])],
+            ),
+            CourseSpec(
+                title='Немецкий: Уровень A1',
+                description='Основы грамматики и произношения.',
+                target_language_code='de',
+                source_language_code='ru',
+                lessons=[LessonSpec(title='Урок 1: Erste Worte', vocabulary=vocabulary_map['ru_to_de'])],
+            ),
+            CourseSpec(
+                title='Итальянский с нуля',
+                description='Язык музыки, искусства и еды.',
+                target_language_code='it',
+                source_language_code='ru',
+                lessons=[LessonSpec(title='Урок 1: Parole semplici', vocabulary=vocabulary_map['ru_to_it'])],
+            ),
+            CourseSpec(
+                title='Японский: Хирагана',
+                description='Первые шаги в восточной письменности.',
+                target_language_code='ja',
+                source_language_code='ru',
+                lessons=[LessonSpec(title='Урок 1: First words', vocabulary=vocabulary_map['ru_to_ja'])],
+            ),
+            CourseSpec(
+                title='Китайский: Введение',
+                description='Основы тонов и иероглифики.',
+                target_language_code='zh',
+                source_language_code='ru',
+                lessons=[LessonSpec(title='Урок 1: Basic tones', vocabulary=vocabulary_map['ru_to_zh'])],
+            ),
+            CourseSpec(
+                title='Португальский: Базовый',
+                description='Солнечный язык Бразилии и Португалии.',
+                target_language_code='pt',
+                source_language_code='ru',
+                lessons=[LessonSpec(title='Урок 1: Primeiras palavras', vocabulary=vocabulary_map['ru_to_pt'])],
+            ),
+            CourseSpec(
+                title='Латынь: Для медиков',
+                description='Классическая база для науки.',
+                target_language_code='la',
+                source_language_code='ru',
+                lessons=[LessonSpec(title='Урок 1: Terminus basicus', vocabulary=vocabulary_map['ru_to_la'])],
+            ),
+            CourseSpec(
+                title='Russian for Beginners',
+                description='Learn to read Cyrillic today.',
+                target_language_code='ru',
+                source_language_code='en',
+                lessons=[
+                    LessonSpec(
+                        title='Lesson 1: Core vocabulary',
+                        vocabulary=vocabulary_map['en_to_ru'],
+                        modifiers=ExerciseModifierSpec(timed_seconds=30, add_audio_support=True, voice_locale='ru-RU'),
+                    )
+                ],
+            ),
+            CourseSpec(
+                title='Spanish Intensive',
+                description='Master Spanish in weeks.',
+                target_language_code='es',
+                source_language_code='en',
+                lessons=[LessonSpec(title='Lesson 1: Fast start', vocabulary=vocabulary_map['en_to_es'])],
+            ),
+        ]
 
-        self.stdout.write(self.style.SUCCESS(f"Done! Created {len(matrix)} courses (12 for RU). Total exercises in pool: {Exercise.objects.count()}"))
+        creator = CourseCreationModule()
+        for spec in course_specs:
+            creator.create_course(spec)
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                (
+                    f"Done! Created {Course.objects.count()} courses with {languages.__len__()} languages "
+                    f"and {Achievement.objects.count()} achievements. "
+                    "Admin login: admin / admin12345"
+                )
+            )
+        )
