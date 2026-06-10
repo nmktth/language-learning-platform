@@ -109,6 +109,10 @@ const translations: Record<string, Record<string, string>> = {
     admin_courses: 'Manage courses',
     admin_lessons: 'Manage lessons',
     admin_exercises: 'Manage exercises',
+    admin_nav_overview: 'Overview',
+    admin_nav_courses: 'Courses',
+    admin_nav_lessons: 'Lessons',
+    admin_nav_exercises: 'Exercises',
     studentspace: 'Student space',
     adminspace: 'Administrator space',
     streak: 'Streak',
@@ -179,6 +183,7 @@ const translations: Record<string, Record<string, string>> = {
     voice_locale: 'Voice locale',
     create: 'Create',
     admin_help: 'Admins can add, edit through admin, and delete content directly in the app.',
+    signed_in_as: 'Signed in as',
     registration_success: 'Account created. You are logged in.',
     form_error_prefix: 'Please fix:',
     total_courses: 'Courses',
@@ -226,6 +231,10 @@ const translations: Record<string, Record<string, string>> = {
     admin_courses: 'Управление курсами',
     admin_lessons: 'Управление уроками',
     admin_exercises: 'Управление заданиями',
+    admin_nav_overview: 'Обзор',
+    admin_nav_courses: 'Курсы',
+    admin_nav_lessons: 'Уроки',
+    admin_nav_exercises: 'Задания',
     studentspace: 'Пространство ученика',
     adminspace: 'Пространство администратора',
     streak: 'Серия',
@@ -296,6 +305,7 @@ const translations: Record<string, Record<string, string>> = {
     voice_locale: 'Локаль голоса',
     create: 'Создать',
     admin_help: 'Админ может добавлять, удалять и в целом управлять контентом прямо из приложения.',
+    signed_in_as: 'Вошли как',
     registration_success: 'Аккаунт создан, вход выполнен.',
     form_error_prefix: 'Нужно исправить:',
     total_courses: 'Курсы',
@@ -875,7 +885,6 @@ const App: React.FC = () => {
         <div>
           <div className="card-topline">{t('admin_panel')}</div>
           <h1>{t('manage_content')}</h1>
-          <p>{t('admin_help')}</p>
         </div>
       </section>
       <div className="admin-stats-grid">
@@ -899,7 +908,9 @@ const App: React.FC = () => {
       </section>
       <section className="admin-list-card">
         <h2>{t('admin_courses')}</h2>
-        {courses.map((course) => <div key={course.id} className="admin-list-item"><div><strong>{course.title}</strong><p>{course.description}</p></div><button className="btn-secondary btn-danger-soft" onClick={() => void deleteEntity('courses', course.id)}>{t('delete')}</button></div>)}
+        <div className="admin-list-scroll">
+          {courses.length ? courses.map((course) => <div key={course.id} className="admin-list-item"><div><strong>{course.title}</strong><p>{course.description}</p></div><button className="btn-secondary btn-danger-soft" onClick={() => void deleteEntity('courses', course.id)}>{t('delete')}</button></div>) : <div className="admin-empty">{t('no_courses')}</div>}
+        </div>
       </section>
     </div>
   );
@@ -915,7 +926,9 @@ const App: React.FC = () => {
       </section>
       <section className="admin-list-card">
         <h2>{t('admin_lessons')}</h2>
-        {flatLessons.map((lesson) => <div key={lesson.id} className="admin-list-item"><div><strong>{lesson.title}</strong><p>{courses.find((course) => course.id === lesson.course)?.title} · #{lesson.order}</p></div><button className="btn-secondary btn-danger-soft" onClick={() => void deleteEntity('lessons', lesson.id)}>{t('delete')}</button></div>)}
+        <div className="admin-list-scroll">
+          {flatLessons.length ? flatLessons.map((lesson) => <div key={lesson.id} className="admin-list-item"><div><strong>{lesson.title}</strong><p>{courses.find((course) => course.id === lesson.course)?.title} · #{lesson.order}</p></div><button className="btn-secondary btn-danger-soft" onClick={() => void deleteEntity('lessons', lesson.id)}>{t('delete')}</button></div>) : <div className="admin-empty">{t('no_lessons')}</div>}
+        </div>
       </section>
     </div>
   );
@@ -937,7 +950,9 @@ const App: React.FC = () => {
       </section>
       <section className="admin-list-card">
         <h2>{t('admin_exercises')}</h2>
-        {flatExercises.map((exercise) => <div key={exercise.id} className="admin-list-item"><div><strong>{getExerciseTypeLabel(exercise.type, t)}</strong><p>{exercise.data.question}</p></div><button className="btn-secondary btn-danger-soft" onClick={() => void deleteEntity('exercises', exercise.id)}>{t('delete')}</button></div>)}
+        <div className="admin-list-scroll">
+          {flatExercises.length ? flatExercises.map((exercise) => <div key={exercise.id} className="admin-list-item"><div><strong>{getExerciseTypeLabel(exercise.type, t)}</strong><p>{exercise.data.question}</p></div><button className="btn-secondary btn-danger-soft" onClick={() => void deleteEntity('exercises', exercise.id)}>{t('delete')}</button></div>) : <div className="admin-empty">{t('no_exercises')}</div>}
+        </div>
       </section>
     </div>
   );
@@ -987,22 +1002,33 @@ const App: React.FC = () => {
   );
 
   const renderAdminShell = () => {
-    const sections: { id: AdminSection; label: string }[] = [
-      { id: 'admin_dashboard', label: t('admin_dashboard') },
-      { id: 'admin_courses', label: t('admin_courses') },
-      { id: 'admin_lessons', label: t('admin_lessons') },
-      { id: 'admin_exercises', label: t('admin_exercises') },
+    const sections: { id: AdminSection; label: string; icon: string }[] = [
+      { id: 'admin_dashboard', label: t('admin_nav_overview'), icon: '01' },
+      { id: 'admin_courses', label: t('admin_nav_courses'), icon: '02' },
+      { id: 'admin_lessons', label: t('admin_nav_lessons'), icon: '03' },
+      { id: 'admin_exercises', label: t('admin_nav_exercises'), icon: '04' },
     ];
 
     return (
       <div className="admin-layout">
-        <aside className="admin-sidebar">
-          <h2>{t('adminspace')}</h2>
-          <p>{currentUser?.username}</p>
-          {sections.map((section) => <button key={section.id} className={`admin-nav-btn ${view === section.id ? 'active' : ''}`} onClick={() => setView(section.id)}>{section.label}</button>)}
-          <div className="sidebar-controls"><ThemeBtn /><LangSelect /></div>
-          <button className="btn-secondary full-width" onClick={logout}>{t('logout')}</button>
-        </aside>
+        <header className="admin-topbar">
+          <div className="admin-brand">
+            <div className="auth-brand-mark admin-brand-mark">L</div>
+            <div>
+              <div className="micro-label">{t('admin_panel')}</div>
+              <h1>{t('manage_content')}</h1>
+            </div>
+          </div>
+          <nav className="admin-nav" aria-label={t('admin_panel')}>
+            {sections.map((section) => <button key={section.id} className={`admin-nav-btn ${view === section.id ? 'active' : ''}`} onClick={() => setView(section.id)}><span>{section.icon}</span>{section.label}</button>)}
+          </nav>
+          <div className="admin-actions">
+            <div className="admin-user-chip"><span>{t('signed_in_as')}</span><strong>{currentUser?.username}</strong></div>
+            <ThemeBtn />
+            <LangSelect />
+            <button className="btn-secondary admin-logout" onClick={logout}>{t('logout')}</button>
+          </div>
+        </header>
         <section className="admin-content">
           {adminMessage && <div className="unlock-banner">{adminMessage}</div>}
           {view === 'admin_dashboard' && renderAdminDashboard()}
